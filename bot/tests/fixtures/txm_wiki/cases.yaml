@@ -8,7 +8,8 @@ sources:
     PrismTrack detects and tracks scene objects; its object_id remains stable within a track.
     RouteWeaver produces desired trajectories and behavior decisions, not actuator feedback.
     ScanClock acquires lidar packets and calibrates the sensor timestamp offset.
-    WireSpec defines the CAN signal steering_angle_raw: unsigned 16 bits, scale 0.01 rad.
+    WireSpec is a normative CAN signal specification. Its steering_angle_raw field MUST
+    be unsigned 16 bits with scale 0.01 rad.
     BeaconPose estimates ego pose using map matching. MapForge produces its map tiles.
     ServoLoop tracks RouteWeaver trajectories with feedback and emits desired steering commands.
     FleetGate is a cross-system QA method: replay a recorded scenario, compare the trajectory

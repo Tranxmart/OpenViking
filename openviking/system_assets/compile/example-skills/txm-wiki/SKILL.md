@@ -78,6 +78,11 @@ Reuse the existing canonical home for the same subject; do not create synonymous
 cross-topic copies. Keep homonyms distinct with a useful qualifier. Connect adjacent
 subjects across topics using links to established article paths or native target URIs.
 Do not invent a link destination for an article that has not been established.
+Finalize article categories and filenames before writing their cross-references. Before
+submission, compare every outgoing article link with the final paths in this assignment
+and the inspected target catalogs; repair links after any filename/category change.
+If a destination is not established, leave the subject name unlinked. Never emit a
+placeholder, provisional or TODO link.
 
 When no enabled specialized topic fits, use only `general`. This fallback never
 overrides the exclusion of user information. Do not force an arbitrary specialized
