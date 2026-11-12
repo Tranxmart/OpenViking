@@ -156,14 +156,13 @@ def example_wiki():
 
 def test_topic_policy_and_packaged_manifest():
     config = policy()
-    assert config["version"] == 1 and config["fallback_topic"] == "general"
+    assert config["version"] == 2 and config["fallback_topic"] == "general"
     assert set(config["categories"]) == {
         "entity",
         "concept",
         "method",
         "comparison",
         "analysis",
-        "reference",
     }
     assert set(config["topics"]) == {
         "general",
@@ -189,7 +188,7 @@ def test_topic_policy_and_packaged_manifest():
 
 
 @pytest.mark.parametrize(
-    "damage", ["missing", "duplicate", "broken", "type", "users", "sidecar", "flat"]
+    "damage", ["missing", "duplicate", "broken", "type", "reference", "users", "sidecar", "flat"]
 )
 def test_artifact_checker_rejects_contract_violations(damage):
     files = example_wiki()
@@ -202,6 +201,13 @@ def test_artifact_checker_rejects_contract_violations(damage):
     elif damage == "type":
         files["topics/infra/entity/artifact-relay.md"] = markdown(
             "summary", "Artifact Relay", "Cache."
+        )
+    elif damage == "reference":
+        files["topics/canbus/reference/wire-spec.md"] = markdown(
+            "reference", "WireSpec", "A CAN signal specification."
+        )
+        files["topics/canbus/index.md"] = markdown(
+            "index", "canbus", "- [WireSpec](reference/wire-spec.md): A CAN signal specification."
         )
     elif damage == "users":
         files["topics/users/entity/profile.md"] = markdown("entity", "Profile", "Disabled.")

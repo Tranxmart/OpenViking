@@ -1,6 +1,6 @@
-version: 1
+version: 2
 fallback_topic: general
-categories: [entity, concept, method, comparison, analysis, reference]
+categories: [entity, concept, method, comparison, analysis]
 topics:
   general:
     enabled: true

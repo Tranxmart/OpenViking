@@ -92,7 +92,7 @@ home merely to avoid the fallback. Do not target a fixed article count.
 
 New articles live at `topics/<topic>/<category>/<article>.md`, relative to the compile
 target. Use stable subject-based names and preserve existing canonical paths. Create
-category directories only when they contain articles. Use exactly these six categories:
+category directories only when they contain articles. Use exactly these five categories:
 
 | Category | Reader purpose |
 | --- | --- |
@@ -101,10 +101,9 @@ category directories only when they contain articles. Use exactly these six cate
 | `method` | An evidenced procedure with prerequisites, decisions and verification |
 | `comparison` | Alternatives compared on shared evidence-supported dimensions |
 | `analysis` | A cross-source answer to a question, with reasoning and uncertainty |
-| `reference` | A specification, normative contract, signal table or convention |
 
 Default to entity or concept. Use method, comparison and analysis only when their full
-reader purpose is supported. Reference is a knowledge category, not citation machinery.
+reader purpose is supported.
 Do not create source-summary pages or one article per file, upload or conversation.
 
 Each article is complete UTF-8 OKF Markdown, beginning with YAML frontmatter:

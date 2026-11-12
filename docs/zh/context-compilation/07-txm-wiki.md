@@ -53,8 +53,8 @@ txm-wiki/
     └── <其他启用的 topic>/index.md    # 空 topic 也保留目录
 ```
 
-正文分类为 `entity`、`concept`、`method`、`comparison`、`analysis`、`reference`；
-reference 表示规范与约定，不是引用数据库。分类目录有正文时才出现，不要求分类索引。
+正文分类为 `entity`、`concept`、`method`、`comparison`、`analysis`。
+分类目录有正文时才出现，不要求分类索引。
 页面使用原生 OKF frontmatter（`type`、`title`、单行 `description`）和匹配的 H1。
 各 topic 目录列出全部正文、别名与检索说明，根索引只负责 topic 路由。
 

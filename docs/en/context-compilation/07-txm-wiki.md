@@ -61,10 +61,10 @@ txm-wiki/
     └── <other-enabled-topic>/index.md # exists even when empty
 ```
 
-Article categories are `entity`, `concept`, `method`, `comparison`, `analysis` and
-`reference`. Reference means specifications and conventions. Category directories appear
-only when populated; category indexes are not required. Every page has native OKF
-frontmatter (`type`, `title`, one-line `description`) and a matching H1. Article links,
+Article categories are `entity`, `concept`, `method`, `comparison` and `analysis`.
+Category directories appear only when populated; category indexes are not required.
+Every page has native OKF frontmatter (`type`, `title`, one-line `description`) and a
+matching H1. Article links,
 aliases and retrieval descriptions live in each topic catalog, not a global article dump.
 
 The Skill preserves source identifiers, formulas, units, applicability and uncertainty.
