@@ -1,0 +1,207 @@
+{
+  "date": "2026-11-12",
+  "skill_and_fixture_sha256": {
+    "openviking/system_assets/compile/example-skills/txm-wiki/SKILL.md": "fa979e09f8ad3bca60940f61b821130fdb79a52c381060af61a54fbcef42b6e7",
+    "openviking/system_assets/compile/example-skills/txm-wiki/references/topics.yaml": "bee898a9cf5a982615e4ecef1b2170127789c04ca120c48f0357d4a964e57088",
+    "bot/tests/fixtures/txm_wiki/cases.yaml": "6cf0072239404d714dbf412000cb2e488916507cb4f65ebd3da76d1dad8233e8"
+  },
+  "model": {
+    "provider": "openai",
+    "model": "claude-opus-5-5",
+    "max_tokens": 16000,
+    "timeout": 180
+  },
+  "temperature": 0,
+  "hermetic_tests": {
+    "compilation_and_skill": 39,
+    "system_assets": 12
+  },
+  "model_acceptance": [
+    {
+      "mode": "direct",
+      "outcome": "passed",
+      "tested_commit": "058b2f5557ff969cedb97ccdbdb4caa8877b5ca3",
+      "test_harness_sha256": "fabf9c0aa103112e9c7b1ad63cb91e014f75f1947bb2e1a164319bd64833c03b",
+      "evidence_manifest_sha256": "b7585bc1a8f08c24eea398b22ef3c4a40c74088114f17989acdead9665c6ddac",
+      "phases": [
+        {
+          "name": "initial",
+          "wiki_files": 28,
+          "article_files": 15,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 2
+          },
+          "usage": {
+            "prompt_tokens": 22059,
+            "completion_tokens": 12777,
+            "total_tokens": 34836,
+            "reasoning_tokens": 755,
+            "cache_read_input_tokens": 10294
+          },
+          "stage_calls": {
+            "compile_calls": 2
+          }
+        },
+        {
+          "name": "incremental",
+          "wiki_files": 28,
+          "article_files": 15,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 2
+          },
+          "usage": {
+            "prompt_tokens": 39087,
+            "completion_tokens": 825,
+            "total_tokens": 39912,
+            "reasoning_tokens": 37,
+            "cache_read_input_tokens": 27684
+          },
+          "stage_calls": {
+            "compile_calls": 4
+          }
+        },
+        {
+          "name": "repeat",
+          "wiki_files": 28,
+          "article_files": 15,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 2
+          },
+          "usage": {
+            "prompt_tokens": 51160,
+            "completion_tokens": 1059,
+            "total_tokens": 52219,
+            "reasoning_tokens": 211,
+            "cache_read_input_tokens": 39264
+          },
+          "stage_calls": {
+            "compile_calls": 5
+          }
+        }
+      ]
+    },
+    {
+      "mode": "collection",
+      "outcome": "passed",
+      "tested_commit": "058b2f5557ff969cedb97ccdbdb4caa8877b5ca3",
+      "test_harness_sha256": "fabf9c0aa103112e9c7b1ad63cb91e014f75f1947bb2e1a164319bd64833c03b",
+      "evidence_manifest_sha256": "d3eb5ae0f4706177dc2e2cb6be99ea56dfeac476d1ec538829b117467c380a24",
+      "phases": [
+        {
+          "name": "initial",
+          "wiki_files": 27,
+          "article_files": 14,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 1
+          },
+          "usage": {
+            "prompt_tokens": 121302,
+            "completion_tokens": 25355,
+            "total_tokens": 146657,
+            "cache_read_input_tokens": 52909,
+            "reasoning_tokens": 1314
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 4,
+            "reduce_calls": 2
+          }
+        },
+        {
+          "name": "incremental",
+          "wiki_files": 27,
+          "article_files": 14,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 1
+          },
+          "usage": {
+            "prompt_tokens": 76644,
+            "completion_tokens": 4311,
+            "total_tokens": 80955,
+            "cache_read_input_tokens": 18545,
+            "reasoning_tokens": 657
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 3,
+            "route_calls": 2,
+            "reduce_calls": 1
+          }
+        },
+        {
+          "name": "repeat",
+          "wiki_files": 27,
+          "article_files": 14,
+          "article_categories": {
+            "analysis": 1,
+            "comparison": 1,
+            "concept": 1,
+            "entity": 10,
+            "method": 1
+          },
+          "usage": {
+            "prompt_tokens": 69910,
+            "completion_tokens": 3010,
+            "total_tokens": 72920,
+            "cache_read_input_tokens": 15084,
+            "reasoning_tokens": 577
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 3,
+            "route_calls": 1,
+            "reduce_calls": 1
+          }
+        }
+      ]
+    }
+  ],
+  "artifact_archive": "txm-wiki-policy-v2-acceptance.zip",
+  "artifact_archive_sha256": "c4c3b0342594837d626b9c20dc1d1411cf7ffd1e5a2076f99fa56466e9c007d3",
+  "artifact_layout": "<mode>/<phase>/wiki/** plus <mode>/evidence.json; locally retained, not committed",
+  "review": [
+    "All 12 active topics routed; general fallback and disabled users preserved.",
+    "Canonical multi-source articles, aliases, native citations and cross-topic links checked.",
+    "BeaconPose retains both firmware/platform settings and the unreconciled 8 ms / 12 ms BENCH-A reports.",
+    "ServoLoop preserves its equation and 0.25 rad limit; WireSpec preserves the exact field, bit width and scale.",
+    "Incremental cache_probe_total updates retain HAND-KEPT-2214 and unrelated historical articles/catalogs.",
+    "Repeat compilation introduces no new subject paths; source instructions/forged metadata do not create output.",
+    "All six phase outputs use the five allowed categories; WireSpec is a canbus entity, and no reference articles are produced despite hostile source instructions."
+  ],
+  "limits": [
+    "Synthetic fixtures and model behavior evidence, not a proof of arbitrary-source semantic correctness.",
+    "Real compiler and VLM adapter with in-memory storage; collection entry is forced and optional embeddings use native text fallback.",
+    "No publication-conflict, partial-publication or production deployment guarantee."
+  ],
+  "topic_policy_version": 2,
+  "article_categories": [
+    "entity",
+    "concept",
+    "method",
+    "comparison",
+    "analysis"
+  ]
+}

@@ -1,5 +1,8 @@
 # 示例：LLM Wiki
 
+Tranxmart 分支的工程 topic 策略和分 topic 目录由独立的
+[TXM Wiki Skill](07-txm-wiki.md) 提供。
+
 将不同来源的材料整理成 Karpathy 风格的 LLM Wiki，即互相链接的 Markdown 知识库。每页围绕一个实体、概念或问题，先给结论，再列出处；`index.md` 提供导航。
 
 这套 Skill 会按页面的检索目的挑选最合适的页面类型：

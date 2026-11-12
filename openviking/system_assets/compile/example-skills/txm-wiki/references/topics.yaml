@@ -1,0 +1,56 @@
+version: 2
+fallback_topic: general
+categories: [entity, concept, method, comparison, analysis]
+topics:
+  general:
+    enabled: true
+    scope: Engineering knowledge without an appropriate specialized topic.
+    boundary: The sole fallback; never user profiles, preferences or personal memory.
+  infra:
+    enabled: true
+    scope: Cloud services, build and CI, data platforms and developer tooling.
+    boundary: Own generic execution and storage infrastructure; domain algorithms and onboard runtime belong to their specialized topics.
+  hardware:
+    enabled: true
+    scope: Physical compute platforms, electrical and mechanical design, power and thermal systems.
+    boundary: Sensor behavior and calibration belong to sensors; CAN signal contracts belong to canbus; software integration belongs to system.
+  perception:
+    enabled: true
+    scope: Detection, recognition, tracking, fusion and scene interpretation.
+    boundary: Own interpretation of observations; raw acquisition and device calibration belong to sensors, ego pose estimation to localization.
+  planning:
+    enabled: true
+    scope: Routing, behavior decisions, motion and trajectory planning.
+    boundary: Own desired maneuvers and trajectories; feedback tracking and actuator command generation belong to control.
+  sensors:
+    enabled: true
+    scope: Sensing devices, intrinsic and extrinsic calibration, synchronization, raw acquisition and device-specific drivers.
+    boundary: Physical platform power and mechanical design belong to hardware; interpreted scene output belongs to perception; vehicle CAN protocols to canbus.
+  canbus:
+    enabled: true
+    scope: CAN transport, vehicle signal protocols, DBC contracts, encoding and decoding.
+    boundary: Own signal representation and transmission; control laws and desired actuator commands belong to control.
+  localization:
+    enabled: true
+    scope: Ego pose estimation, reference frames, state estimation and map matching.
+    boundary: Own pose inference and use of map evidence; map representation, production and maintenance belong to map.
+  control:
+    enabled: true
+    scope: Feedback control, trajectory tracking and actuator command generation.
+    boundary: Desired trajectory generation belongs to planning; CAN packing, transmission and signal contracts belong to canbus.
+  testqa:
+    enabled: true
+    scope: Cross-system test and QA methods, scenario design, acceptance, regression and quality assessment.
+    boundary: Subsystem-specific validation stays with that subsystem; generic CI execution and build infrastructure belong to infra.
+  system:
+    enabled: true
+    scope: Shared onboard runtime, messaging, process startup and integration across domains.
+    boundary: Own common runtime and integration contracts; device-specific acquisition drivers belong to sensors, CAN protocols to canbus, cloud infrastructure to infra.
+  map:
+    enabled: true
+    scope: Map data representation, creation, domain-specific processing, versioning and maintenance.
+    boundary: Pose estimation and map matching belong to localization; generic storage and pipeline execution belong to infra.
+  users:
+    enabled: false
+    scope: Reserved for future organizational user memory; its design is not established.
+    boundary: No dedicated sources, ingestion, extraction, articles, catalogs or destinations now; never redirect user information into general.
