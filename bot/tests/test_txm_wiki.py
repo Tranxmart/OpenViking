@@ -25,7 +25,7 @@ from vikingbot.compile.pipeline import Pipeline
 from vikingbot.compile.skill_resources import SkillResources
 from vikingbot.compile.sources import split_source
 
-from openviking_cli.exceptions import NotFoundError
+from openviking_cli.exceptions import NotFoundError, OpenVikingError
 from scripts.build_support.system_assets_manifest import build_system_assets_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -278,6 +278,10 @@ class FixtureClient:
         ]
         return {"resources": [{"uri": uri} for _, uri in sorted(matches, reverse=True)[:limit]]}
 
+    async def compile_embeddings(self, texts, **kwargs):
+        # Exercise supported text candidate fallback without a second model endpoint.
+        raise OpenVikingError("Fixture storage has no embedding endpoint", code="UNAVAILABLE")
+
     def outputs(self):
         return {
             uri.removeprefix(TARGET + "/"): text
@@ -386,6 +390,11 @@ async def test_model_compilation(tmp_path, monkeypatch, mode):
 
     config = json.loads(Path(os.environ["TXM_WIKI_EVAL_CONFIG"]).read_text())
     cases = yaml.safe_load(CASES.read_text())
+    skill_text = (SKILL / "SKILL.md").read_text()
+    input_hashes = {
+        str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in (SKILL / "SKILL.md", SKILL / "references/topics.yaml", CASES, Path(__file__))
+    }
     provider = VLMProviderAdapter(OpenAIVLM(config), config["model"])
     client = FixtureClient()
     output_root = Path(os.environ.get("TXM_WIKI_EVAL_OUTPUT", str(tmp_path)))
@@ -413,7 +422,7 @@ async def test_model_compilation(tmp_path, monkeypatch, mode):
                     "not an agent or command executor. Preserve all Skill requirements.",
                 }
             ),
-            skill=(SKILL / "SKILL.md").read_text(),
+            skill=skill_text,
             usage={},
         )
         runtime.tools = {"openviking_multi_read": TargetReader(client)}
@@ -483,15 +492,7 @@ async def test_model_compilation(tmp_path, monkeypatch, mode):
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
             "planning_baseline": "5043e1f3169a29a7abccdc1a7aa8647c79c15428",
-            "inputs": {
-                str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in (
-                    SKILL / "SKILL.md",
-                    SKILL / "references/topics.yaml",
-                    CASES,
-                    Path(__file__),
-                )
-            },
+            "inputs": input_hashes,
             "model": {
                 key: config.get(key)
                 for key in ("provider", "model", "api_base", "max_tokens", "timeout")
