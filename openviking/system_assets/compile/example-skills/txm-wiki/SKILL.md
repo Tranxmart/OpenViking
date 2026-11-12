@@ -51,6 +51,9 @@ Design a collection plan using the existing operators, not one stage per topic:
   The full configured topic policy is available to writing stages. Resolve same-path
   catalog contributions by merging their entries, preserving unchanged historical
   articles. The current task's `related_outputs` is partial, not the historical inventory.
+  A job does not own unrelated topic catalogs. On an existing target, do not regenerate
+  the complete set of indexes from that job's limited evidence. Include recalled
+  affected catalogs with historical subject matches when they need updating.
 - Small inputs may use direct generation with the same requirements. If complete
   synthesis or catalog maintenance does not fit, request collection planning rather
   than dropping facts, topics or entries. Do not prescribe additional runtime operators.
@@ -129,6 +132,16 @@ Maintain `topics/<topic>/index.md` for every enabled topic, also with `type: ind
 Describe its scope and boundary, and list every active article in that topic, grouped
 by populated category, with canonical link, title, one-line retrieval description and
 useful aliases. Say explicitly when the topic is empty. Do not create category indexes.
+
+For a fresh target, create the root and all enabled-topic indexes, including empty ones.
+For an existing target, preserve untouched indexes without submitting them. A body-only
+article update normally needs no catalog change: retain its canonical title and retrieval
+description unless its identity or retrieval purpose changes. Update a catalog only
+after reading its existing complete content and obtaining its revision; preserve every
+unrelated entry. If that content is unavailable to this job, leave it unsubmitted rather
+than reconstructing it. Never mark a topic empty merely because its articles are absent
+from this batch or historical recall. Missing required catalog context is a limitation,
+not evidence that its historical articles do not exist.
 
 Read the historical catalogs and inspect relevant target content before updating them.
 Merge new entries with valid unchanged entries. Remove or alter an old entry only when

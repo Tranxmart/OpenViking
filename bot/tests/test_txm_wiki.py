@@ -437,6 +437,10 @@ async def test_model_compilation(tmp_path, monkeypatch, mode):
         assert not runtime.failures, runtime.failures
         for operation in bundle.operations:
             assert operation["uri"].startswith(TARGET + "/")
+            exists = operation["uri"] in client.documents
+            assert exists == (operation["mode"] == "replace"), (
+                f"Invalid {operation['mode']} for fixture target: {operation['uri']}"
+            )
             client.documents[operation["uri"]] = operation["content"]
         assert "references/topics.yaml" in runtime.resources.hashes, "Policy was never loaded"
         await runtime.write_coverage([op["uri"] for op in bundle.operations])
