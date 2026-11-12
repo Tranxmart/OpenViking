@@ -1,0 +1,158 @@
+{
+  "work_item": "AIINFRA-2214",
+  "date": "2026-11-12",
+  "planning_baseline": "5043e1f3169a29a7abccdc1a7aa8647c79c15428",
+  "skill_and_fixture_sha256": {
+    "openviking/system_assets/compile/example-skills/txm-wiki/SKILL.md": "61a9165b5f1cdd42f496daadf4ab0cd8b868001d0fad4223baca0cb22615ed2d",
+    "openviking/system_assets/compile/example-skills/txm-wiki/references/topics.yaml": "b99273ba4416e11dba1fdedbd9734c1581e79823d2b0a12b5bdfcebedc7c438d",
+    "bot/tests/fixtures/txm_wiki/cases.yaml": "d6758ad5c9ebec364fc1e2a7c0e9ec0c4de668fe8df35e6516294be1c2171a4e"
+  },
+  "model": {
+    "provider": "openai",
+    "model": "claude-opus-5-5",
+    "max_tokens": 16000,
+    "timeout": 180
+  },
+  "temperature": 0,
+  "hermetic_tests": {
+    "compilation_and_skill": 38,
+    "system_assets": 12
+  },
+  "model_acceptance": [
+    {
+      "mode": "direct",
+      "outcome": "passed",
+      "tested_commit": "b5cf8075de78d5b3e338c1659c6987717bb4fa38",
+      "test_harness_sha256": "308816bbc233c4d03425edf33e288c5632da85283a9492ed814f0ba7feb666e6",
+      "evidence_manifest_sha256": "2be59ee97e5d2288764119208b80b621f5fa0d01edb27f29000aaa518a92f443",
+      "phases": [
+        {
+          "name": "initial",
+          "wiki_files": 28,
+          "article_files": 15,
+          "usage": {
+            "prompt_tokens": 22104,
+            "completion_tokens": 14012,
+            "total_tokens": 36116,
+            "reasoning_tokens": 688,
+            "cache_read_input_tokens": 10313
+          },
+          "stage_calls": {
+            "compile_calls": 2
+          }
+        },
+        {
+          "name": "incremental",
+          "wiki_files": 28,
+          "article_files": 15,
+          "usage": {
+            "prompt_tokens": 39647,
+            "completion_tokens": 826,
+            "total_tokens": 40473,
+            "reasoning_tokens": 76,
+            "cache_read_input_tokens": 27892
+          },
+          "stage_calls": {
+            "compile_calls": 4
+          }
+        },
+        {
+          "name": "repeat",
+          "wiki_files": 28,
+          "article_files": 15,
+          "usage": {
+            "prompt_tokens": 52049,
+            "completion_tokens": 1345,
+            "total_tokens": 53394,
+            "reasoning_tokens": 260,
+            "cache_read_input_tokens": 39795
+          },
+          "stage_calls": {
+            "compile_calls": 5
+          }
+        }
+      ]
+    },
+    {
+      "mode": "collection",
+      "outcome": "passed",
+      "tested_commit": "b5cf8075de78d5b3e338c1659c6987717bb4fa38",
+      "test_harness_sha256": "308816bbc233c4d03425edf33e288c5632da85283a9492ed814f0ba7feb666e6",
+      "evidence_manifest_sha256": "c30f5a5c99235785723e518dfdba06c3bdba7381f806c7a9d9180bf373654e07",
+      "phases": [
+        {
+          "name": "initial",
+          "wiki_files": 27,
+          "article_files": 14,
+          "usage": {
+            "prompt_tokens": 105140,
+            "completion_tokens": 24618,
+            "total_tokens": 129758,
+            "reasoning_tokens": 1423,
+            "cache_read_input_tokens": 33888
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 3,
+            "reduce_calls": 2
+          }
+        },
+        {
+          "name": "incremental",
+          "wiki_files": 27,
+          "article_files": 14,
+          "usage": {
+            "prompt_tokens": 72430,
+            "completion_tokens": 3597,
+            "total_tokens": 76027,
+            "reasoning_tokens": 354,
+            "cache_read_input_tokens": 16522
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 3,
+            "route_calls": 1,
+            "reduce_calls": 1
+          }
+        },
+        {
+          "name": "repeat",
+          "wiki_files": 27,
+          "article_files": 14,
+          "usage": {
+            "prompt_tokens": 71112,
+            "completion_tokens": 3096,
+            "total_tokens": 74208,
+            "cache_read_input_tokens": 15387,
+            "reasoning_tokens": 578
+          },
+          "stage_calls": {
+            "plan_calls": 1,
+            "map_calls": 2,
+            "review_calls": 3,
+            "route_calls": 1,
+            "reduce_calls": 1
+          }
+        }
+      ]
+    }
+  ],
+  "artifact_archive": "aiinfra-2214-acceptance.zip",
+  "artifact_archive_sha256": "2c5040db6f1a56b06c5cb61c38ea98d9583cb33fd85e9a48a19becc23f857aba",
+  "artifact_layout": "<mode>/<phase>/wiki/** plus <mode>/evidence.json; locally retained, not committed",
+  "review": [
+    "All 12 active topics routed; general fallback and disabled users preserved.",
+    "Canonical multi-source articles, aliases, native citations and cross-topic links checked.",
+    "BeaconPose retains both firmware/platform settings and the unreconciled 8 ms / 12 ms BENCH-A reports.",
+    "ServoLoop preserves its equation and 0.25 rad limit; WireSpec preserves the exact field, bit width and scale.",
+    "Incremental cache_probe_total updates retain HAND-KEPT-2214 and unrelated historical articles/catalogs.",
+    "Repeat compilation introduces no new subject paths; source instructions/forged metadata do not create output."
+  ],
+  "limits": [
+    "Synthetic fixtures and model behavior evidence, not a proof of arbitrary-source semantic correctness.",
+    "Real compiler and VLM adapter with in-memory storage; collection entry is forced and optional embeddings use native text fallback.",
+    "No publication-conflict, partial-publication or production deployment guarantee; deterministic catalog enforcement remains AIINFRA-2216."
+  ]
+}

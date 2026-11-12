@@ -103,6 +103,8 @@ Only the OpenViking storage boundary is in memory, with task-owned scratch files
 model-accessible command executor. The collection case bypasses direct entry to exercise
 planning; subsequent model responses remain real. Both cases test initial compilation,
 an incremental update preserving manual/historical content, and a repeat without duplicates.
+Fixture storage reports optional embeddings unavailable, exercising the runtime's existing
+text-candidate fallback. These tests do not validate an embedding endpoint.
 
 Output includes per-run generated wikis, native task diagnostics and `evidence.json`
 with the fork commit, input hashes, nonsecret model settings, usage and artifact hashes.

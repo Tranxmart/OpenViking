@@ -91,6 +91,8 @@ PYTHONPATH=bot python -m pytest -c bot/pytest.ini bot/tests/test_txm_wiki.py \
 只有 OpenViking 存储边界使用内存替身，临时文件归任务独占，不向模型暴露命令执行器。
 集合执行用例绕过 direct 入口以覆盖规划流程，后续模型响应仍来自真实模型。
 两种模式均检查首次编译、保留人工上下文和历史正文的增量更新，以及不产生重复主题的重复编译。
+夹具存储将可选 embedding 服务报告为不可用，从而覆盖运行时已有的文本候选回退；
+这些测试不验证 embedding 端点。
 
 产物包含每轮 Wiki、原生任务诊断，以及记录 fork 提交、输入哈希、非密钥模型配置、用量和产物
 哈希的 `evidence.json`。除自动断言外，还要对照原始夹具检查正文综合与未解决分歧；
