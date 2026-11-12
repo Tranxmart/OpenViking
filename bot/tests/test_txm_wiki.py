@@ -495,7 +495,6 @@ async def test_model_compilation(tmp_path, monkeypatch, mode):
             "fork_commit": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
-            "planning_baseline": "5043e1f3169a29a7abccdc1a7aa8647c79c15428",
             "inputs": input_hashes,
             "model": {
                 key: config.get(key)

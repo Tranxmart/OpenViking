@@ -46,7 +46,7 @@ validation stays with that subsystem; cross-system QA belongs to `testqa`.
 
 `users` is reserved and disabled. There are no user-memory inputs, extraction or output;
 `general` does not hold user profiles. Technical contributions still route by their
-engineering subject. Future reuse for organizational user memory is not designed here.
+engineering subject.
 
 ```text
 txm-wiki/
@@ -89,7 +89,7 @@ technical fidelity, conflicting variants, missing metadata and hostile source in
 For model-backed acceptance, set `TXM_WIKI_EVAL_CONFIG` to a private JSON file containing
 the existing OpenAI-compatible VLM fields `provider`, `model`, `api_base`, `api_key`,
 `max_tokens` and `timeout`. Restrict it to the owner (`chmod 600`) and keep it outside the
-checkout. Use a key authorized for the selected model; listing it does not prove access.
+checkout.
 
 ```bash
 TXM_WIKI_EVAL_CONFIG=/private/path/vlm.json \
@@ -110,8 +110,3 @@ Output includes per-run generated wikis, native task diagnostics and `evidence.j
 with the fork commit, input hashes, nonsecret model settings, usage and artifact hashes.
 Review the generated subject explanations and unresolved disagreements against the raw
 fixtures as well as checking assertions; structural checks alone do not establish truth.
-
-This Skill supplies the desired successful-output contract. Deterministic catalog
-reconciliation after actual publication belongs to AIINFRA-2216; trusted source-context
-transport belongs to AIINFRA-2215. Flat-wiki migration, service integration, scheduling,
-user-memory design and production rollout are outside AIINFRA-2214.

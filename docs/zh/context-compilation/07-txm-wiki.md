@@ -38,7 +38,7 @@ ov read viking://resources/txm-wiki/index.md
 跨 topic 用链接连接。子系统专用验证留在该子系统，跨系统 QA 归 `testqa`。
 
 `users` 仅预留且禁用，不接入用户记忆来源，不抽取记忆或生成正文。
-`general` 不存用户画像；用户贡献的技术资料仍按工程主题路由。未来组织用户记忆的复用方式不在此设计。
+`general` 不存用户画像；用户贡献的技术资料仍按工程主题路由。
 
 ```text
 txm-wiki/
@@ -77,8 +77,7 @@ PYTHONPATH=bot python -m pytest -c bot/pytest.ini bot/tests/test_txm_wiki.py -q
 
 真实模型验收通过 `TXM_WIKI_EVAL_CONFIG` 指定私有 JSON 配置文件，使用现有兼容 OpenAI 的
 VLM 字段：`provider`、`model`、`api_base`、`api_key`、`max_tokens`、`timeout`。
-文件放在仓库外并限制为仅属主可读写（`chmod 600`）。密钥必须有目标模型的推理权限；
-能列出模型不等于能调用。
+文件放在仓库外并限制为仅属主可读写（`chmod 600`）。
 
 ```bash
 TXM_WIKI_EVAL_CONFIG=/private/path/vlm.json \
@@ -97,6 +96,3 @@ PYTHONPATH=bot python -m pytest -c bot/pytest.ini bot/tests/test_txm_wiki.py \
 产物包含每轮 Wiki、原生任务诊断，以及记录 fork 提交、输入哈希、非密钥模型配置、用量和产物
 哈希的 `evidence.json`。除自动断言外，还要对照原始夹具检查正文综合与未解决分歧；
 结构检查不证明语义正确。
-
-Skill 定义成功产物的契约；实际发布后的确定性目录对账属于 AIINFRA-2216，可信来源上下文传递
-属于 AIINFRA-2215。旧平铺 Wiki 迁移、服务集成、定时维护、用户记忆设计和生产发布不属于本项。

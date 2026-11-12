@@ -1,7 +1,5 @@
 {
-  "work_item": "AIINFRA-2214",
   "date": "2026-11-12",
-  "planning_baseline": "5043e1f3169a29a7abccdc1a7aa8647c79c15428",
   "skill_and_fixture_sha256": {
     "openviking/system_assets/compile/example-skills/txm-wiki/SKILL.md": "61a9165b5f1cdd42f496daadf4ab0cd8b868001d0fad4223baca0cb22615ed2d",
     "openviking/system_assets/compile/example-skills/txm-wiki/references/topics.yaml": "b99273ba4416e11dba1fdedbd9734c1581e79823d2b0a12b5bdfcebedc7c438d",
@@ -153,6 +151,6 @@
   "limits": [
     "Synthetic fixtures and model behavior evidence, not a proof of arbitrary-source semantic correctness.",
     "Real compiler and VLM adapter with in-memory storage; collection entry is forced and optional embeddings use native text fallback.",
-    "No publication-conflict, partial-publication or production deployment guarantee; deterministic catalog enforcement remains AIINFRA-2216."
+    "No publication-conflict, partial-publication or production deployment guarantee."
   ]
 }
