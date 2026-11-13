@@ -1220,13 +1220,18 @@ export class OpenVikingClient {
       to,
       skill,
       instruction: options.instruction,
+      source_context: options.sourceContext,
       args:
         options.args && Object.keys(options.args).length
           ? options.args
           : undefined,
     });
     return this.request("POST", "/api/v1/compile", {
-      body: mergeExtra(body, options.extra, ["instruction", "args"]),
+      body: mergeExtra(body, options.extra, [
+        "instruction",
+        "args",
+        "source_context",
+      ]),
     });
   }
 

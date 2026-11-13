@@ -87,23 +87,45 @@ ov compile \
 
 **SDKs**
 
-The Python, TypeScript, and Go SDKs pass `instruction` and `args` through their Compile options:
+The Python, TypeScript, and Go SDKs expose typed source context alongside `instruction` and `args` in their Compile options. For example, after staging `design.md` under the source directory:
 
 ::: code-group
 
 ```python [Python]
+from openviking_sdk import CompileSourceContext
+
+source_context: CompileSourceContext = {
+    "schema_version": 1,
+    "sources": [{
+        "uri": "viking://resources/research/design.md",
+        "identity": {"namespace": "example-source-system", "id": "design-document"},
+        "version": "revision-4",
+    }],
+}
 task = client.compile(
     ["viking://resources/research"],
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
+    options={"source_context": source_context},
 )
 ```
 
 ```ts [TypeScript]
+import type { CompileSourceContext } from "@openviking/sdk";
+
+const sourceContext: CompileSourceContext = {
+  schema_version: 1,
+  sources: [{
+    uri: "viking://resources/research/design.md",
+    identity: { namespace: "example-source-system", id: "design-document" },
+    version: "revision-4",
+  }],
+};
 const task = await client.compile(
   ["viking://resources/research"],
   "viking://resources/research-wiki",
   "viking://user/default/skills/research-compiler",
+  { sourceContext },
 );
 ```
 
@@ -113,7 +135,18 @@ task, err := client.Compile(
     []string{"viking://resources/research"},
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
-    nil,
+    &openviking.CompileOptions{
+        SourceContext: &openviking.CompileSourceContext{
+            SchemaVersion: 1,
+            Sources: []openviking.CompileSource{{
+                URI: "viking://resources/research/design.md",
+                Identity: &openviking.SourceIdentity{
+                    Namespace: "example-source-system", ID: "design-document",
+                },
+                Version: openviking.String("revision-4"),
+            }},
+        },
+    },
 )
 ```
 
@@ -121,7 +154,7 @@ task, err := client.Compile(
 
 ### Supplied source context
 
-HTTP callers can supply an optional `source_context` object to resource/Skill file compilation. It is passed through the public API to VikingBot; existing requests without it retain their behavior. This release adds no CLI or SDK option for this field. Do not put it in `args`: VikingBot still rejects unsupported argument keys.
+HTTP and SDK callers can supply an optional `source_context` object to resource/Skill file compilation. It is passed through the public API to VikingBot; existing requests without it retain their behavior. The SDK option is `source_context` in Python, `sourceContext` in TypeScript, and `SourceContext` in Go; nested metadata follows the schema below. SDK types describe the request structure; the server validates metadata and normalizes timestamps. Use the dedicated option rather than `extra`/`Extra`, which cannot override SDK-defined fields. This release adds no CLI option for this field. Do not put it in `args`: VikingBot still rejects unsupported argument keys.
 
 ```json
 {

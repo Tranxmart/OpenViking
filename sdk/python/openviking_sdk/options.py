@@ -125,9 +125,54 @@ class MCPToolMount(_RequiredMCPToolMount, total=False):
     tags: List[str]
 
 
+class SourceIdentity(TypedDict):
+    """Caller-owned document identity within a namespace."""
+
+    namespace: str
+    id: str
+
+
+class SourceDigest(TypedDict):
+    """SHA-256 of the entire exact UTF-8 Markdown input."""
+
+    algorithm: Literal["sha256"]
+    representation: Literal["utf8-markdown"]
+    value: str
+
+
+class SourceTimestamp(TypedDict):
+    """An ISO-8601 instant with an explicit timezone and caller-defined semantics."""
+
+    kind: Literal["source", "work"]
+    meaning: str
+    basis: str
+    value: str
+
+
+class _RequiredCompileSource(TypedDict):
+    uri: str
+
+
+class CompileSource(_RequiredCompileSource, total=False):
+    """Metadata for one admitted native source file; absent values stay unknown."""
+
+    identity: SourceIdentity
+    version: str
+    digest: SourceDigest
+    timestamps: List[SourceTimestamp]
+
+
+class CompileSourceContext(TypedDict):
+    """Version-one provenance for a single Compile run, validated by the server."""
+
+    schema_version: Literal[1]
+    sources: List[CompileSource]
+
+
 class CompileOptions(_ExtraOptions, total=False):
     instruction: str
     args: Dict[str, Any]
+    source_context: CompileSourceContext
 
 
 class RuleCompileSource(AddResourceOptions, total=False):

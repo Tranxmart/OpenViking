@@ -87,23 +87,45 @@ ov compile \
 
 **SDK**
 
-Python、TypeScript 和 Go SDK 都通过各自的 Compile options 传递 `instruction` 和 `args`：
+Python、TypeScript 和 Go SDK 都通过各自的 Compile options 传递带类型定义的来源上下文，以及 `instruction` 和 `args`。例如，将 `design.md` 写入来源目录后：
 
 ::: code-group
 
 ```python [Python]
+from openviking_sdk import CompileSourceContext
+
+source_context: CompileSourceContext = {
+    "schema_version": 1,
+    "sources": [{
+        "uri": "viking://resources/research/design.md",
+        "identity": {"namespace": "example-source-system", "id": "design-document"},
+        "version": "revision-4",
+    }],
+}
 task = client.compile(
     ["viking://resources/research"],
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
+    options={"source_context": source_context},
 )
 ```
 
 ```ts [TypeScript]
+import type { CompileSourceContext } from "@openviking/sdk";
+
+const sourceContext: CompileSourceContext = {
+  schema_version: 1,
+  sources: [{
+    uri: "viking://resources/research/design.md",
+    identity: { namespace: "example-source-system", id: "design-document" },
+    version: "revision-4",
+  }],
+};
 const task = await client.compile(
   ["viking://resources/research"],
   "viking://resources/research-wiki",
   "viking://user/default/skills/research-compiler",
+  { sourceContext },
 );
 ```
 
@@ -113,7 +135,18 @@ task, err := client.Compile(
     []string{"viking://resources/research"},
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
-    nil,
+    &openviking.CompileOptions{
+        SourceContext: &openviking.CompileSourceContext{
+            SchemaVersion: 1,
+            Sources: []openviking.CompileSource{{
+                URI: "viking://resources/research/design.md",
+                Identity: &openviking.SourceIdentity{
+                    Namespace: "example-source-system", ID: "design-document",
+                },
+                Version: openviking.String("revision-4"),
+            }},
+        },
+    },
 )
 ```
 
@@ -121,7 +154,7 @@ task, err := client.Compile(
 
 ### 传入来源上下文
 
-HTTP 调用方可为 Resource/Skill 文件编译传入可选的 `source_context`，公开 API 会把它传到 VikingBot；不传时保持现有行为。本次不新增 CLI 或 SDK 参数。不要放到 `args`：VikingBot 仍拒绝未实现的参数键。
+HTTP 和 SDK 调用方可为 Resource/Skill 文件编译传入可选的 `source_context`，公开 API 会把它传到 VikingBot；不传时保持现有行为。Python、TypeScript 和 Go 的 SDK 参数分别为 `source_context`、`sourceContext` 和 `SourceContext`，嵌套元数据遵循下述 schema。SDK 类型描述请求结构；元数据校验和时间戳归一化由服务端完成。请使用专用参数，不要放到 `extra`/`Extra`，后者不能覆盖 SDK 已定义的字段。本次不新增 CLI 参数。不要放到 `args`：VikingBot 仍拒绝未实现的参数键。
 
 ```json
 {
