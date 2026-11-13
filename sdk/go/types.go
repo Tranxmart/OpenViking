@@ -65,9 +65,46 @@ type AddSkillOptions struct {
 
 // CompileOptions controls Compile.
 type CompileOptions struct {
-	Instruction string
-	Args        map[string]any
-	Extra       map[string]any
+	Instruction   string
+	Args          map[string]any
+	SourceContext *CompileSourceContext
+	Extra         map[string]any
+}
+
+// CompileSourceContext carries per-run provenance validated by the server.
+type CompileSourceContext struct {
+	SchemaVersion int             `json:"schema_version"` // Must be 1.
+	Sources       []CompileSource `json:"sources"`        // Use an empty slice for no sources.
+}
+
+// CompileSource describes one admitted native file; absent values stay unknown.
+type CompileSource struct {
+	URI        string            `json:"uri"`
+	Identity   *SourceIdentity   `json:"identity,omitempty"`
+	Version    *string           `json:"version,omitempty"`
+	Digest     *SourceDigest     `json:"digest,omitempty"`
+	Timestamps []SourceTimestamp `json:"timestamps,omitempty"`
+}
+
+// SourceIdentity identifies a caller-owned document within a namespace.
+type SourceIdentity struct {
+	Namespace string `json:"namespace"`
+	ID        string `json:"id"`
+}
+
+// SourceDigest hashes the entire exact UTF-8 Markdown input.
+type SourceDigest struct {
+	Algorithm      string `json:"algorithm"`      // Must be "sha256".
+	Representation string `json:"representation"` // Must be "utf8-markdown".
+	Value          string `json:"value"`          // 64 lowercase hexadecimal characters.
+}
+
+// SourceTimestamp records an instant with caller-defined semantics.
+type SourceTimestamp struct {
+	Kind    string `json:"kind"` // "source" or "work".
+	Meaning string `json:"meaning"`
+	Basis   string `json:"basis"`
+	Value   string `json:"value"` // Timezone-qualified ISO-8601, e.g. time.RFC3339Nano.
 }
 
 // AdminCreateAccountOptions controls AdminCreateAccountWithOptions.

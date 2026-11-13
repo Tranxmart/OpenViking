@@ -22,6 +22,7 @@ from pydantic import TypeAdapter
 
 from openviking.core.namespace import classify_uri, relative_uri_path, uri_parts
 from openviking.core.skill_loader import validate_skill_format
+from openviking.models.source_context import CompileSource, CompileSourceContext
 from openviking.utils.path_safety import (
     sanitize_relative_viking_path,
 )
@@ -598,6 +599,20 @@ class BotCompileService:
                 target_stat = await client.stat(raw_target)
             target = str(target_stat.get("uri") or "").rstrip("/")
             self._validate_target_directory(target, target_stat)
+            source_context = request.source_context
+            if source_context is not None:
+                if classify_uri(target).context_type not in {
+                    "resource",
+                    "skill",
+                } and not has_directory_plan(changes):
+                    raise ValueError("source_context requires native source-file compilation")
+                entries = []
+                for entry in source_context.sources:
+                    attrs = await client.attrs(entry.uri)
+                    uri = str(attrs.get("uri") or "").rstrip("/")
+                    entries.append(CompileSource.model_validate({**entry.model_dump(), "uri": uri}))
+                source_context = CompileSourceContext(schema_version=1, sources=tuple(entries))
+                source_context.require_roots(sources)
         except CompileFailure:
             raise
         except OpenVikingError as exc:
@@ -608,8 +623,8 @@ class BotCompileService:
             await client.close()
 
         instruction = (request.instruction or "").strip()
-        return SanitizedCompileRequest(
-            **{
+        return SanitizedCompileRequest.model_validate(
+            {
                 "from": sources,
                 "to": target,
                 "instruction": instruction or DEFAULT_COMPILE_INSTRUCTION,
@@ -617,6 +632,7 @@ class BotCompileService:
                 "skill": canonical_skill,
                 "last_compile_time": None if changes is not None else cutoff,
                 "changes": changes,
+                "source_context": source_context,
             }
         )
 
@@ -811,6 +827,8 @@ class BotCompileService:
                     client, request.from_, cutoff=request.last_compile_time
                 )
             if source_files is not None:
+                if request.source_context is not None:
+                    self._validate_source_context_inputs(request.source_context, source_files)
                 if not full_execution and not source_files and request.changes is None:
 
                     def complete_without_sources(task: CompileTask) -> None:
@@ -1125,6 +1143,8 @@ class BotCompileService:
             if source_files is not None
             else await self._list_pipeline_source_files(client, request)
         )
+        if request.source_context is not None:
+            self._validate_source_context_inputs(request.source_context, ordered)
         if not resume:
             await pipeline.files.put("inputs", dict.fromkeys(ordered, "pending"))
 
@@ -1151,7 +1171,9 @@ class BotCompileService:
                         raise content
                     else:
                         readable.append((uri, content))
-                for batch in pack_source_batches(readable, source_limits):
+                for batch in pack_source_batches(
+                    readable, source_limits, source_context=request.source_context
+                ):
                     yield batch
 
         try:
@@ -1589,6 +1611,13 @@ class BotCompileService:
         if not files and cutoff is None and not allow_empty:
             raise ValueError("Compile sources contain no files")
         return sorted(files)
+
+    @staticmethod
+    def _validate_source_context_inputs(context: CompileSourceContext, inputs: list[str]) -> None:
+        try:
+            context.require_inputs(inputs)
+        except ValueError as exc:
+            raise CompileFailure("INVALID_ARGUMENT", str(exc), stage="pipeline") from exc
 
     async def _prepare_source_batches(
         self, client: VikingClient, roots: list[str], *, files: list[str] | None = None

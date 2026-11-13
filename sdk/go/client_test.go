@@ -2082,6 +2082,77 @@ func TestSessionExistsHandlesNotFound(t *testing.T) {
 	}
 }
 
+func TestCompileSourceContext(t *testing.T) {
+	full := &CompileSourceContext{
+		SchemaVersion: 1,
+		Sources: []CompileSource{
+			{
+				URI:      "viking://resources/source/doc.md",
+				Identity: &SourceIdentity{Namespace: "document-service", ID: "doc-1"},
+				Version:  String("revision-4"),
+				Digest: &SourceDigest{
+					Algorithm: "sha256", Representation: "utf8-markdown", Value: strings.Repeat("a", 64),
+				},
+				Timestamps: []SourceTimestamp{{
+					Kind: "source", Meaning: "content_modified", Basis: "origin", Value: "2026-10-01T09:00:00+08:00",
+				}},
+			},
+			{URI: "viking://resources/source/unknown.md"},
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		context *CompileSourceContext
+		want    string
+	}{
+		{name: "omitted"},
+		{name: "empty", context: &CompileSourceContext{SchemaVersion: 1, Sources: []CompileSource{}}, want: `{"schema_version":1,"sources":[]}`},
+		{name: "full", context: full, want: `{
+			"schema_version":1,
+			"sources":[{
+				"uri":"viking://resources/source/doc.md",
+				"identity":{"namespace":"document-service","id":"doc-1"},
+				"version":"revision-4",
+				"digest":{"algorithm":"sha256","representation":"utf8-markdown","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+				"timestamps":[{"kind":"source","meaning":"content_modified","basis":"origin","value":"2026-10-01T09:00:00+08:00"}]
+			},{"uri":"viking://resources/source/unknown.md"}]
+		}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, closeServer := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v1/compile" {
+					t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				body := readJSONBody(t, r)
+				got, present := body["source_context"]
+				if tc.want == "" {
+					if present {
+						t.Fatalf("unexpected source_context: %#v", got)
+					}
+				} else {
+					var want any
+					if err := json.Unmarshal([]byte(tc.want), &want); err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("source_context = %#v, want %#v", got, want)
+					}
+				}
+				writeOK(t, w, map[string]any{"task_id": "cmp_1"})
+			}))
+			defer closeServer()
+			opts := &CompileOptions{SourceContext: tc.context}
+			if _, err := client.Compile(context.Background(), []string{"viking://resources/source"}, "viking://resources/wiki", "viking://agent/skills/wiki", opts); err != nil {
+				t.Fatal(err)
+			}
+			opts.Extra = map[string]any{"source_context": map[string]any{}}
+			if _, err := client.Compile(context.Background(), nil, "", "", opts); err == nil || !strings.Contains(err.Error(), `extra cannot override "source_context"`) {
+				t.Fatalf("expected source_context override rejection, got %v", err)
+			}
+		})
+	}
+}
+
 func TestCompileAndListTasksRequests(t *testing.T) {
 	client, closeServer := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

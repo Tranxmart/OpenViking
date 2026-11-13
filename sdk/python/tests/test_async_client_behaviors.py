@@ -10,14 +10,86 @@ import httpx
 import pytest
 from openviking_sdk import (
     AsyncHTTPClient,
+    CompileSource,
+    CompileSourceContext,
     ContextPart,
     ImagePart,
+    SourceDigest,
+    SourceIdentity,
+    SourceTimestamp,
     SyncHTTPClient,
     TextPart,
     ToolPart,
 )
 from openviking_sdk.client import Session, SyncSession
 from openviking_sdk.errors import NotFoundError
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_type", [AsyncHTTPClient, SyncHTTPClient])
+@pytest.mark.parametrize("include_sources", [False, True])
+async def test_compile_source_context_wire_contract(client_type, include_sources):
+    context = CompileSourceContext(
+        schema_version=1,
+        sources=[
+            CompileSource(
+                uri="viking://resources/source/doc.md",
+                identity=SourceIdentity(namespace="document-service", id="doc-1"),
+                version="revision-4",
+                digest=SourceDigest(
+                    algorithm="sha256", representation="utf8-markdown", value="a" * 64
+                ),
+                timestamps=[
+                    SourceTimestamp(
+                        kind="source",
+                        meaning="content_modified",
+                        basis="origin",
+                        value="2026-10-01T09:00:00+08:00",
+                    )
+                ],
+            ),
+            CompileSource(uri="viking://resources/source/unknown.md"),
+        ]
+        if include_sources
+        else [],
+    )
+
+    def handle(request):
+        assert request.method == "POST" and request.url.path == "/api/v1/compile"
+        assert json.loads(request.content) == {
+            "from": ["viking://resources/source"],
+            "to": "viking://resources/wiki",
+            "skill": "viking://agent/skills/wiki",
+            "source_context": context,
+        }
+        return httpx.Response(202, json={"status": "ok", "result": {"task_id": "cmp_1"}})
+
+    client = client_type(url="http://localhost:1933")
+    async_client = client if client_type is AsyncHTTPClient else client._async_client
+    async_client._http = httpx.AsyncClient(
+        base_url="http://localhost:1933", transport=httpx.MockTransport(handle)
+    )
+    try:
+        result = client.compile(
+            ["viking://resources/source"],
+            "viking://resources/wiki",
+            "viking://agent/skills/wiki",
+            options={"source_context": context},
+        )
+        if client_type is AsyncHTTPClient:
+            result = await result
+        assert result == {"task_id": "cmp_1"}
+        with pytest.raises(ValueError, match="extra cannot override 'source_context'"):
+            result = client.compile(
+                ["viking://resources/source"],
+                "viking://resources/wiki",
+                "viking://agent/skills/wiki",
+                options={"source_context": context, "extra": {"source_context": {}}},
+            )
+            if client_type is AsyncHTTPClient:
+                await result
+    finally:
+        await async_client.close()
 
 
 @pytest.mark.asyncio

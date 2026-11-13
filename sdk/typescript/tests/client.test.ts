@@ -10,7 +10,7 @@ import {
   OpenVikingError,
   normalizeURI,
 } from "../src/index.js";
-import type { AddResourceOptions } from "../src/index.js";
+import type { AddResourceOptions, CompileSourceContext } from "../src/index.js";
 
 const ok = (result: unknown) =>
   new Response(JSON.stringify({ status: "ok", result }), {
@@ -933,6 +933,61 @@ describe("OpenVikingClient", () => {
       is_active: false,
       reason: "pause",
     });
+  });
+
+  it.each<CompileSourceContext>([
+    { schema_version: 1, sources: [] },
+    {
+      schema_version: 1,
+      sources: [
+        {
+          uri: "viking://resources/source/doc.md",
+          identity: { namespace: "document-service", id: "doc-1" },
+          version: "revision-4",
+          digest: {
+            algorithm: "sha256",
+            representation: "utf8-markdown",
+            value: "a".repeat(64),
+          },
+          timestamps: [
+            {
+              kind: "source",
+              meaning: "content_modified",
+              basis: "origin",
+              value: "2026-10-01T09:00:00+08:00",
+            },
+          ],
+        },
+        { uri: "viking://resources/source/unknown.md" },
+      ],
+    },
+  ])("serializes typed Compile source context: %j", async (sourceContext) => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(ok({ task_id: "cmp_1" }));
+    const client = new OpenVikingClient({
+      baseUrl: "https://example.com",
+      fetch: fetcher,
+    });
+    await client.compile(
+      ["viking://resources/source"],
+      "viking://resources/wiki",
+      "viking://agent/skills/wiki",
+      { sourceContext },
+    );
+    expect(JSON.parse(String(fetcher.mock.calls[0]![1]?.body))).toEqual({
+      from: ["viking://resources/source"],
+      to: "viking://resources/wiki",
+      skill: "viking://agent/skills/wiki",
+      source_context: sourceContext,
+    });
+    expect(() =>
+      client.compile([], "", "", {
+        sourceContext,
+        extra: { source_context: {} },
+      }),
+    ).toThrow("extra cannot override source_context");
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("uses public Compile and task routes with SDK-compatible options", async () => {

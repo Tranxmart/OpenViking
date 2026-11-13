@@ -12,6 +12,7 @@ from typing import Any
 from loguru import logger
 
 from openviking.core.namespace import classify_uri
+from openviking.models.source_context import SOURCE_CONTEXT_RULES
 from openviking.utils.path_safety import safe_join_viking_uri
 from vikingbot.compile import entry
 from vikingbot.compile.hashing import content_hash, digest
@@ -129,6 +130,7 @@ class Pipeline:
             '"to" in the instruction refers to the compile output root; return paths '
             'relative to it without adding a literal "to/" prefix.\n'
         )
+        instructions += "\n## Runtime source context\n" + SOURCE_CONTEXT_RULES
         if self.skill_target:
             return instructions + _SKILL_OUTPUT
         return instructions
@@ -505,6 +507,10 @@ class Pipeline:
                     "continues_before": part.continues_before,
                     "continues_after": part.continues_after,
                 }
+                if part.source_context is not None:
+                    metadata["source_context"] = part.source_context.model_dump(
+                        mode="json", exclude_none=True
+                    )
                 if part.image:
                     metadata["media_kind"] = "image"
                 record_id = digest(metadata)[:24]

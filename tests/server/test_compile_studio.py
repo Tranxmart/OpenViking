@@ -103,6 +103,133 @@ def test_compile_rejects_system_source(source):
         service._normalize_request_uris(request, ctx)
 
 
+@pytest.mark.parametrize(
+    "source_uri", ["viking://resources/other/note.md", "viking://resources/source-other/note.md"]
+)
+def test_compile_source_context_cannot_expand_source_roots(source_uri):
+    from openviking.service.compile_service import CompileRequest, CompileService
+    from openviking_cli.utils.config.open_viking_config import CompileApiConfig
+
+    service = CompileService(CompileApiConfig(), ExternalTaskService(), SimpleNamespace())
+    ctx = RequestContext(user=UserIdentifier("acme", "alice"), role=Role.USER)
+    request = CompileRequest.model_validate(
+        {
+            "from": ["viking://resources/source"],
+            "to": "viking://resources/wiki",
+            "skill": "viking://system/compile/example-skills/llm-wiki",
+            "source_context": {"schema_version": 1, "sources": [{"uri": source_uri}]},
+        }
+    )
+    with pytest.raises(InvalidArgumentError, match="outside the Compile sources"):
+        service._normalize_request_uris(request, ctx)
+
+
+async def test_compile_source_context_is_per_run_not_a_saved_schedule():
+    from openviking.service.compile_service import CompileRequest, CompileService
+    from openviking_cli.utils.config.open_viking_config import CompileApiConfig
+
+    service = CompileService(CompileApiConfig(), ExternalTaskService(), SimpleNamespace())
+    request = CompileRequest.model_validate(
+        {
+            "from": ["viking://resources/source"],
+            "to": "viking://resources/wiki",
+            "skill": "viking://system/compile/example-skills/llm-wiki",
+            "args": {"auto_update": True},
+            "source_context": {"schema_version": 1, "sources": []},
+        }
+    )
+    ctx = RequestContext(user=UserIdentifier("acme", "alice"), role=Role.USER)
+    with pytest.raises(InvalidArgumentError, match="per-run"):
+        await service.create(request, connection={}, ctx=ctx)
+
+
+async def test_source_context_crosses_http_queue_and_runtime_transport(monkeypatch):
+    """Exercise both real HTTP contracts with storage and remote I/O replaced at their boundaries."""
+    import httpx
+    from fastapi import FastAPI
+
+    from openviking.models.source_context import CompileSourceContext
+    from openviking.server.auth import get_request_context
+    from openviking.server.routers import compile as routes
+    from openviking.service.compile_service import CompileService
+    from openviking_cli.utils.config.open_viking_config import CompileApiConfig
+
+    queued = SimpleNamespace(
+        task_id="cmp-source-context", to_dict=lambda: {"task_id": "cmp-source-context"}
+    )
+    tasks = SimpleNamespace(create=AsyncMock(return_value=queued))
+    fs = SimpleNamespace(
+        stat=AsyncMock(
+            side_effect=lambda uri, *args, **kwargs: {"isDir": not uri.endswith("/SKILL.md")}
+        ),
+        ensure_write_access=AsyncMock(),
+    )
+    compile_service = CompileService(CompileApiConfig(), tasks, fs)
+    compile_service.configure_local_backend("http://runtime.test", "")
+    monkeypatch.setattr(routes, "get_service", lambda: SimpleNamespace(compile=compile_service))
+    ctx = RequestContext(user=UserIdentifier("acme", "alice"), role=Role.USER, api_key="test-key")
+    app = FastAPI()
+    app.include_router(routes.router)
+
+    async def identity():
+        return ctx
+
+    app.dependency_overrides[get_request_context] = identity
+    context = {
+        "schema_version": 1,
+        "sources": [
+            {
+                "uri": "viking://resources/source/a.md",
+                "version": "opaque-4",
+                "timestamps": [
+                    {
+                        "kind": "source",
+                        "meaning": "modified",
+                        "basis": "origin",
+                        "value": "2026-09-01T08:00:00+08:00",
+                    }
+                ],
+            }
+        ],
+    }
+    incoming = {
+        "from": ["viking://resources/source"],
+        "to": "viking://resources/wiki",
+        "skill": "viking://system/compile/example-skills/llm-wiki",
+        "source_context": context,
+    }
+    expected = CompileSourceContext.model_validate(context).model_dump(
+        mode="json", exclude_none=True
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://api.test"
+    ) as api:
+        response = await api.post("/api/v1/compile", json=incoming)
+    assert response.status_code == 202, response.text
+    saved = tasks.create.call_args.kwargs
+    assert saved["payload"]["source_context"] == expected
+    assert saved["connection"]["account_id"] == "acme"
+    sent = []
+
+    def receive(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"session_id": "runtime-task"})
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        "openviking.service.compile_service.httpx.AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(receive), **kwargs),
+    )
+    assert (
+        await compile_service.submit(
+            queued.task_id, saved["payload"], saved["private_payload"], saved["connection"]
+        )
+        == "runtime-task"
+    )
+    assert sent[0]["task_type"] == "compile"
+    assert sent[0]["payload"]["source_context"] == expected
+
+
 @pytest.mark.asyncio
 async def test_compile_api_rejects_system_target_without_creating_task(service, app, client):
     from openviking.server.auth import get_request_context
@@ -448,7 +575,12 @@ async def test_http_contract_preserves_retries_and_compile_target_lifecycle(
         "to": target,
         "skill": skill,
         "args": {"api_key": "private-runtime-key"},
+        "source_context": {
+            "schema_version": 1,
+            "sources": [{"uri": f"{source}/a.md", "version": "source-v1", "timestamps": []}],
+        },
     }
+    initial_payload = dict(payload)
     accepted = await client.post(
         "/api/v1/compile",
         json=payload,
@@ -472,6 +604,7 @@ async def test_http_contract_preserves_retries_and_compile_target_lifecycle(
         await tracker.get(first, **owner)
     ).error
     assert await service.fs.read(page, ctx) == "generated"
+    assert calls[0]["source_context"] == payload.pop("source_context")
     assert len(compile_metric_events) == 1
     assert compile_metric_events[0]["uri"] == page
     assert compile_metric_events[0]["task_id"] == first
@@ -761,7 +894,7 @@ async def test_http_contract_preserves_retries_and_compile_target_lifecycle(
         patch.setattr(service.compile, "_local_endpoint", None)
         recovered = await client.post(
             "/api/v1/compile",
-            json={**payload, "instruction": None},
+            json={**initial_payload, "instruction": None},
             headers={"Idempotency-Key": "compile-initial-key"},
         )
         assert recovered.status_code == 202, recovered.text

@@ -28,7 +28,10 @@ func (c *Client) Compile(
 	if len(opts.Args) > 0 {
 		payload["args"] = opts.Args
 	}
-	if err := mergeExtraProtected(payload, opts.Extra, "instruction", "args"); err != nil {
+	if opts.SourceContext != nil {
+		payload["source_context"] = opts.SourceContext
+	}
+	if err := mergeExtraProtected(payload, opts.Extra, "instruction", "args", "source_context"); err != nil {
 		return nil, err
 	}
 	var result map[string]any

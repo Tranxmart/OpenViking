@@ -191,10 +191,42 @@ export interface BatchWriteOptions extends WaitOptions {
   processingMode?: ProcessingMode;
   extra?: JsonObject;
 }
-/** Compile request options. */
+/** Caller-owned document identity within a namespace. */
+export interface SourceIdentity {
+  namespace: string;
+  id: string;
+}
+/** SHA-256 of the entire exact UTF-8 Markdown input. */
+export interface SourceDigest {
+  algorithm: "sha256";
+  representation: "utf8-markdown";
+  value: string;
+}
+/** An ISO-8601 instant with an explicit timezone and caller-defined semantics. */
+export interface SourceTimestamp {
+  kind: "source" | "work";
+  meaning: string;
+  basis: string;
+  value: string;
+}
+/** Metadata for one admitted native source file; absent values stay unknown. */
+export interface CompileSource {
+  uri: string;
+  identity?: SourceIdentity;
+  version?: string;
+  digest?: SourceDigest;
+  timestamps?: SourceTimestamp[];
+}
+/** Per-run provenance in the API's wire format, validated by the server. */
+export interface CompileSourceContext {
+  schema_version: 1;
+  sources: CompileSource[];
+}
+/** Compile instructions and optional per-run source provenance. */
 export interface CompileOptions {
   instruction?: string;
   args?: JsonObject;
+  sourceContext?: CompileSourceContext;
   extra?: JsonObject;
 }
 /** Retrieval tag update options. */

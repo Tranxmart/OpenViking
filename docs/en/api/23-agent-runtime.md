@@ -19,6 +19,7 @@ Agent Runtime Server executes Agent tasks and currently supports Compile. Applic
 | `skill` | string | Yes | - | Skill directory or its `SKILL.md` URI |
 | `instruction` | string | No | Skill-driven default | Additional instructions for this Compile run |
 | `args` | object | No | - | Execution backend extensions and Compile scheduling controls |
+| `source_context` | object | No | - | Versioned, per-file provenance for one native source-file compilation run |
 
 The scheduling controls `auto_update` and `update_schedule` are handled by OpenViking. The Python example uses `SyncHTTPClient`; await `compile()` with `AsyncHTTPClient`.
 
@@ -86,23 +87,45 @@ ov compile \
 
 **SDKs**
 
-The Python, TypeScript, and Go SDKs pass `instruction` and `args` through their Compile options:
+The Python, TypeScript, and Go SDKs expose typed source context alongside `instruction` and `args` in their Compile options. For example, after staging `design.md` under the source directory:
 
 ::: code-group
 
 ```python [Python]
+from openviking_sdk import CompileSourceContext
+
+source_context: CompileSourceContext = {
+    "schema_version": 1,
+    "sources": [{
+        "uri": "viking://resources/research/design.md",
+        "identity": {"namespace": "example-source-system", "id": "design-document"},
+        "version": "revision-4",
+    }],
+}
 task = client.compile(
     ["viking://resources/research"],
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
+    options={"source_context": source_context},
 )
 ```
 
 ```ts [TypeScript]
+import type { CompileSourceContext } from "@openviking/sdk";
+
+const sourceContext: CompileSourceContext = {
+  schema_version: 1,
+  sources: [{
+    uri: "viking://resources/research/design.md",
+    identity: { namespace: "example-source-system", id: "design-document" },
+    version: "revision-4",
+  }],
+};
 const task = await client.compile(
   ["viking://resources/research"],
   "viking://resources/research-wiki",
   "viking://user/default/skills/research-compiler",
+  { sourceContext },
 );
 ```
 
@@ -112,11 +135,53 @@ task, err := client.Compile(
     []string{"viking://resources/research"},
     "viking://resources/research-wiki",
     "viking://user/default/skills/research-compiler",
-    nil,
+    &openviking.CompileOptions{
+        SourceContext: &openviking.CompileSourceContext{
+            SchemaVersion: 1,
+            Sources: []openviking.CompileSource{{
+                URI: "viking://resources/research/design.md",
+                Identity: &openviking.SourceIdentity{
+                    Namespace: "example-source-system", ID: "design-document",
+                },
+                Version: openviking.String("revision-4"),
+            }},
+        },
+    },
 )
 ```
 
 :::
+
+### Supplied source context
+
+HTTP and SDK callers can supply an optional `source_context` object to resource/Skill file compilation. It is passed through the public API to VikingBot; existing requests without it retain their behavior. The SDK option is `source_context` in Python, `sourceContext` in TypeScript, and `SourceContext` in Go; nested metadata follows the schema below. SDK types describe the request structure; the server validates metadata and normalizes timestamps. Use the dedicated option rather than `extra`/`Extra`, which cannot override SDK-defined fields. This release adds no CLI option for this field. Do not put it in `args`: VikingBot still rejects unsupported argument keys.
+
+```json
+{
+  "schema_version": 1,
+  "sources": [{
+    "uri": "viking://resources/research/design.md",
+    "identity": {"namespace": "example-source-system", "id": "design-document"},
+    "version": "revision-4",
+    "timestamps": [{
+      "kind": "source",
+      "meaning": "content_modified",
+      "basis": "origin-document-clock",
+      "value": "2026-10-01T09:00:00+08:00"
+    }]
+  }]
+}
+```
+
+Place this object in the request's top-level `source_context` field. `schema_version` and `sources` are required when the object is present. Each entry requires a native file `uri`; `identity`, opaque `version`, `digest`, and `timestamps` are optional. Missing metadata remains unknown. The URI is normalized using the existing identity/resource rules and must name an admitted input file under `from`, not a directory or an unrelated file. Entries excluded by incremental filtering are rejected. Duplicate URIs, including aliases that resolve to one URI, unknown fields and unsupported schema versions are rejected.
+
+An optional `digest` has exactly `algorithm: "sha256"`, `representation: "utf8-markdown"`, and `value` containing 64 lowercase hex characters. It hashes the entire exact UTF-8 Markdown input, including original line endings, before chunking or line numbering. A PDF/Office-file digest is not a digest of its Markdown representation. A mismatch fails compilation before synthesis. Native evidence records keep this whole-source digest separate from range hashes. Without a supplied digest the runtime records the actual content hash but sets `digest_verified: false`; matching bytes do not establish authorship or truth.
+
+Each timestamp requires `kind` (`source` or `work`), nonempty `meaning` and `basis`, and a timezone-qualified ISO-8601 `value`. Numeric epochs and timezone-free values are rejected; instants normalize to UTC. Duplicate kind/meaning/basis entries are rejected. The caller defines these semantics: `work` is not assumed to mean modification time or effective time. No latest/effective timestamp is synthesized. Compare applicability before recency, and compare times only when kind, meaning and basis match. Import/task/publication times and opaque version identifiers do not determine source recency.
+
+The caller supplies context through the structured request, not Markdown/frontmatter or model output. Authentication and digest checking do not prove the caller's assertions true. Runtime-owned context stays attached to each original source range and is exposed separately through consolidation, derived-record lineage and evidence reads. Sources with different versions/times remain separate. The LLM still interprets applicability and unresolved disagreements; metadata validation does not prove semantic correctness.
+
+Context is per-run: it is not saved as future schedule metadata. Combining it with `auto_update`/`update_schedule`, using `--skill memory`, or using a legacy memory-target execution path is rejected rather than ignored. The native source-file pipeline also supports directory-plan execution. Metadata uses native request/evidence/task persistence and retention, without custom article IDs, citation tables or permanent history. Retained evidence can carry its context; expired/unavailable evidence does not provide recoverable historical metadata. Source discovery, upstream authentication and population of the fields belong to the caller's later integration.
 
 ### Target settings and operation history
 
@@ -268,7 +333,7 @@ Idempotency-Key: <OV task_id>
 }
 ```
 
-Both `task_type` and `payload` are required. Only `task_type="compile"` is supported. The `payload` uses the task creation fields and validation rules described on this page; `instruction` and `args` are optional. Unsupported types or invalid payloads return `4xx` without creating an execution task.
+Both `task_type` and `payload` are required. Only `task_type="compile"` is supported. The `payload` uses the task creation fields and validation rules described on this page; `instruction`, `args` and `source_context` are optional. Unsupported types or invalid payloads return `4xx` without creating an execution task.
 
 OV forwards the current user's OV API key in `X-API-Key`. It also sends `X-Gateway-Token` when `compile_api.gateway_token` is configured. These credentials must not appear in public task results.
 
