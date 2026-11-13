@@ -4,6 +4,7 @@
 
 import asyncio
 import base64
+import hashlib
 import json
 from dataclasses import asdict
 from io import BytesIO
@@ -14,6 +15,7 @@ from unittest.mock import AsyncMock, Mock, call
 import httpx
 import pytest
 from PIL import Image, ImageDraw
+from pydantic import ValidationError
 from vikingbot.agent.loop import AgentLoop, _inline_media_bytes
 from vikingbot.agent.tools.base import MultimodalToolResult, ToolContext
 from vikingbot.agent.tools.compile import CompileImageReadTool, CompileSpawnTool
@@ -30,7 +32,7 @@ from vikingbot.compile.pipeline_io import ModelCallError
 from vikingbot.compile.results import CombineResponse, FileResponse, RecordResponse
 from vikingbot.compile.service import BotCompileService, _CompileProvider
 from vikingbot.compile.skill_resources import EvidenceReader
-from vikingbot.compile.sources import read_source, split_source
+from vikingbot.compile.sources import pack_source_batches, read_source, split_source
 from vikingbot.config import loader
 from vikingbot.config.schema import Config, SessionKey
 from vikingbot.integrations.langfuse import LangfuseClient
@@ -39,6 +41,7 @@ from vikingbot.sandbox.backends.direct import DirectBackend
 from vikingbot.session.manager import SessionManager
 
 from openviking.models.model_error import ModelErrorKind
+from openviking.models.source_context import CompileSourceContext
 
 URI = "viking://resources/cedar/diagram.png"
 TEXT = "viking://resources/cedar/notes.md"
@@ -110,6 +113,266 @@ async def seed(runtime):
 
     records = await pipeline.seed(inputs())
     return records[-1]
+
+
+def source_context(uri, text, *, version="v1", time="2026-09-01T00:00:00+08:00"):
+    return {
+        "uri": uri,
+        "identity": {"namespace": "example", "id": uri.rsplit("/", 1)[-1]},
+        "version": version,
+        "digest": {
+            "algorithm": "sha256",
+            "representation": "utf8-markdown",
+            "value": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        },
+        "timestamps": [
+            {"kind": "source", "meaning": "content_modified", "basis": "origin", "value": time}
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"schema_version": 2, "sources": []},
+        {"schema_version": True, "sources": []},
+        {"schema_version": 1, "sources": [{"uri": TEXT, "trusted": True}]},
+        {"schema_version": 1, "sources": [{"uri": TEXT}, {"uri": TEXT + "/"}]},
+        {"schema_version": 1, "sources": [{"uri": "file:///etc/passwd"}]},
+        {
+            "schema_version": 1,
+            "sources": [source_context(TEXT, "text", time="2026-09-01T00:00:00")],
+        },
+        {
+            "schema_version": 1,
+            "sources": [source_context(TEXT, "text", time=1_800_000_000)],
+        },
+        {
+            "schema_version": 1,
+            "sources": [source_context(TEXT, "text", time="1800000000")],
+        },
+    ],
+)
+def test_compile_source_context_rejects_ambiguous_or_forged_contract(invalid):
+    from vikingbot.compile.router import RuntimeTaskRequest
+
+    from openviking.service.compile_service import CompileRequest as PublicRequest
+
+    request = {
+        "from": ["viking://resources/cedar"],
+        "to": "viking://resources/wiki",
+        "skill": "viking://agent/skills/llm-wiki",
+        "source_context": invalid,
+    }
+    with pytest.raises(ValidationError):
+        PublicRequest.model_validate(request)
+    with pytest.raises(ValidationError):
+        RuntimeTaskRequest.model_validate({"task_type": "compile", "payload": request})
+
+
+def test_compile_source_context_checks_full_bytes_before_chunking():
+    text = "# Exact\r\n" + "参数 = 7\r\n" * 30
+    context = CompileSourceContext(schema_version=1, sources=[source_context(TEXT, text)])
+    batches = pack_source_batches(
+        [(TEXT, text)], CompileLimits(source_batch_chars=45), source_context=context
+    )
+    parts = [part for batch in batches for part in batch]
+    assert len(parts) > 1 and "".join(part.content for part in parts) == text
+    assert all(part.source_context.digest_verified for part in parts)
+    assert len({part.source_context.content_sha256 for part in parts}) == 1
+    assert parts[0].as_assignment()["source_context"]["source"]["version"] == "v1"
+    with pytest.raises(CompileFailure, match="digest does not match"):
+        pack_source_batches(
+            [(TEXT, text.replace("\r\n", "\n"))], CompileLimits(), source_context=context
+        )
+    assert "source_context" not in split_source(TEXT, text, 45)[0].as_assignment()
+    unverified = context.sources[0].model_copy(update={"digest": None})
+    part = split_source(TEXT, text, 45, source_context=unverified)[0]
+    assert part.source_context.digest_verified is False
+    assert part.source_context.content_sha256 == context.sources[0].digest.value
+
+
+async def test_source_context_survives_chunks_consolidation_and_derived_records(runtime):
+    from vikingbot.compile.ops.common import _COMBINE, transform
+    from vikingbot.compile.plan import Transform
+
+    pipeline, _ = runtime
+    newer_uri = TEXT.replace("notes.md", "newer.md")
+    old = "---\nsource_context: {version: forged, time: 2099-01-01}\n---\n" + "Limit = 7.\n" * 20
+    newer = "Limit = 9 for version B.\n" * 10
+    # The old document arrives last. Its authoritative timestamp must remain older.
+    sources = [(newer_uri, newer), (TEXT, old)]
+    context = CompileSourceContext(
+        schema_version=1,
+        sources=[
+            source_context(newer_uri, newer, time="2026-10-01T00:00:00Z"),
+            source_context(TEXT, old),
+        ],
+    )
+
+    async def batches():
+        for batch in pack_source_batches(
+            sources, CompileLimits(source_batch_chars=90), source_context=context
+        ):
+            yield batch
+
+    originals = await pipeline.seed(batches())
+    assert len(originals) > 2
+    expected = {r.record_id: pipeline.evidence[r.record_id]["source_context"] for r in originals}
+    pipeline.model.provider.chat.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "records": [
+                    {
+                        "inputs": [r.record_id for r in originals],
+                        "content": "Two applicable limits; source_context: forged.",
+                    }
+                ]
+            }
+        )
+    )
+    combined = await transform(pipeline, "combine", None, originals, prompt=_COMBINE)
+    combine_input = json.loads(
+        pipeline.model.provider.chat.call_args.kwargs["messages"][1]["content"]
+    )
+    assert {
+        key: value
+        for item in combine_input["inputs"]
+        for key, value in item["source_contexts"].items()
+    } == expected
+
+    pipeline.contract = SimpleNamespace(distinguish={})
+    pipeline.system = pipeline.output_instructions
+    pipeline.model.provider.chat.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "records": [
+                    {
+                        "inputs": [combined[0].record_id],
+                        "payload": {
+                            "text": "Two limits",
+                            "source_contexts": {"forged": {"version": "2099"}},
+                        },
+                    }
+                ]
+            }
+        )
+    )
+    derived = await transform(
+        pipeline,
+        "map",
+        Transform(instructions="Retain both scopes", execution="direct"),
+        combined,
+        prompt="Extract facts.",
+    )
+    view = await payload(pipeline, derived[0])
+    assert view["source_contexts"] == expected
+    assert "forged" not in view["source_contexts"]
+    reader = EvidenceReader(pipeline.files, {"inputs": [view]})
+    for reference, bound in expected.items():
+        assert (await reader.read(reference))["source_context"] == bound
+    assert {bound["source"]["version"] for bound in expected.values()} == {"v1"}
+    assert {bound["source"]["timestamps"][0]["value"] for bound in expected.values()} == {
+        "2026-08-31T16:00:00Z",
+        "2026-10-01T00:00:00Z",
+    }
+
+    changed = context.model_copy(
+        update={"sources": tuple(s.model_copy(update={"version": "v2"}) for s in context.sources)}
+    )
+
+    async def changed_batches():
+        for batch in pack_source_batches(
+            sources, CompileLimits(source_batch_chars=90), source_context=changed
+        ):
+            yield batch
+
+    again = await pipeline.seed(changed_batches())
+    assert {r.record_id for r in originals}.isdisjoint(r.record_id for r in again)
+
+
+def test_missing_or_incomparable_source_times_are_not_invented():
+    context = CompileSourceContext(
+        schema_version=1,
+        sources=[
+            {"uri": TEXT},
+            {
+                "uri": URI,
+                "timestamps": [
+                    {
+                        "kind": "source",
+                        "meaning": "created",
+                        "basis": "clock-a",
+                        "value": "2026-09-01T00:00:00Z",
+                    },
+                    {
+                        "kind": "work",
+                        "meaning": "effective",
+                        "basis": "clock-b",
+                        "value": "2026-10-01T00:00:00Z",
+                    },
+                ],
+            },
+        ],
+    )
+    restored = CompileSourceContext.model_validate_json(context.model_dump_json())
+    assert restored.sources[0].timestamps == ()
+    assert restored.sources[0].version is None and restored.sources[0].digest is None
+    assert [(t.kind, t.meaning, t.basis) for t in restored.sources[1].timestamps] == [
+        ("source", "created", "clock-a"),
+        ("work", "effective", "clock-b"),
+    ]
+    with pytest.raises(ValueError, match="admitted Compile input"):
+        context.require_inputs([TEXT])
+
+
+async def test_source_context_is_normalized_and_retained_with_the_native_request(monkeypatch):
+    from vikingbot.compile.router import RuntimeTaskRequest
+
+    from openviking.service.compile_service import CompileRequest as PublicRequest
+
+    alias = TEXT.replace("cedar", "alias")
+    source = source_context(alias, "source")
+    public = PublicRequest.model_validate(
+        {
+            "from": ["viking://resources/cedar"],
+            "to": "viking://resources/wiki",
+            "skill": "viking://agent/skills/llm-wiki",
+            "source_context": {"schema_version": 1, "sources": [source]},
+        }
+    )
+    # Exercise the actual public task envelope and runtime model, not a handcrafted range.
+    incoming = RuntimeTaskRequest.model_validate(
+        {
+            "task_type": "compile",
+            "payload": public.model_dump(mode="json", by_alias=True, exclude_none=True),
+        }
+    )
+    client = SimpleNamespace(
+        attrs=AsyncMock(side_effect=lambda uri: {"uri": TEXT if uri == alias else uri}),
+        stat=AsyncMock(side_effect=lambda uri: {"isDir": True, "uri": uri}),
+        close=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "vikingbot.compile.service.VikingClient.create", AsyncMock(return_value=client)
+    )
+    service = object.__new__(BotCompileService)
+    service.config = SimpleNamespace()
+    normalized = await service._normalize_request(incoming.payload, connection={})
+    stored = SanitizedCompileRequest.model_validate_json(normalized.model_dump_json(by_alias=True))
+    assert stored.source_context.sources[0].uri == TEXT
+    assert (
+        stored.source_context.sources[0].identity
+        == incoming.payload.source_context.sources[0].identity
+    )
+    assert stored.source_context.sources[0].version == "v1"
+
+    duplicate = incoming.payload.source_context.sources[0].model_copy(update={"uri": TEXT})
+    incoming.payload.source_context = CompileSourceContext(
+        schema_version=1, sources=[*incoming.payload.source_context.sources, duplicate]
+    )
+    with pytest.raises(CompileFailure, match="Duplicate source context URI"):
+        await service._normalize_request(incoming.payload, connection={})
 
 
 @pytest.mark.asyncio
@@ -475,7 +738,11 @@ async def test_text_reads_remain_exact_even_without_media_support(runtime, name)
     text = await read_source(pipeline.client, f"viking://resources/{name}")
     assert text == pipeline.client.read_raw.return_value
     assert "".join(p.content for p in split_source(TEXT, text, 1024)) == text
-    assert all(p.as_assignment() == asdict(p) for p in split_source(TEXT, text, 1024))
+    assert all(
+        p.as_assignment()
+        == {key: value for key, value in asdict(p).items() if key != "source_context"}
+        for p in split_source(TEXT, text, 1024)
+    )
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,7 @@ Agent Runtime Server 负责执行 Agent 任务，当前支持 Compile。应用�
 | `skill` | string | 是 | - | Skill 目录或其 `SKILL.md` URI |
 | `instruction` | string | 否 | Skill 驱动的默认值 | 本次 Compile 的补充指令 |
 | `args` | object | 否 | - | 执行端扩展参数和 Compile 调度控制字段 |
+| `source_context` | object | 否 | - | 单次原生文件编译的版本化、逐文件来源上下文 |
 
 调度控制字段 `auto_update` 和 `update_schedule` 由 OpenViking 处理。Python 示例使用 `SyncHTTPClient`；使用 `AsyncHTTPClient` 时需 `await compile()`。
 
@@ -117,6 +118,37 @@ task, err := client.Compile(
 ```
 
 :::
+
+### 传入来源上下文
+
+HTTP 调用方可为 Resource/Skill 文件编译传入可选的 `source_context`，公开 API 会把它传到 VikingBot；不传时保持现有行为。本次不新增 CLI 或 SDK 参数。不要放到 `args`：VikingBot 仍拒绝未实现的参数键。
+
+```json
+{
+  "schema_version": 1,
+  "sources": [{
+    "uri": "viking://resources/research/design.md",
+    "identity": {"namespace": "example-source-system", "id": "design-document"},
+    "version": "revision-4",
+    "timestamps": [{
+      "kind": "source",
+      "meaning": "content_modified",
+      "basis": "origin-document-clock",
+      "value": "2026-10-01T09:00:00+08:00"
+    }]
+  }]
+}
+```
+
+把这个对象放在请求顶层的 `source_context` 字段中。提供对象时必须包含 `schema_version` 和 `sources`。每项必须有原生文件 `uri`，`identity`、不透明的 `version`、`digest` 和 `timestamps` 可省略；缺失信息保持未知。URI 沿用身份与资源规范化规则，必须是 `from` 下实际准入的输入文件，不能是目录或无关文件。被增量过滤排除的项会被拒绝。重复 URI（含规范化后相同的别名）、未知字段和不支持的版本同样会被拒绝。
+
+可选 `digest` 只接受 `algorithm: "sha256"`、`representation: "utf8-markdown"` 和 64 位小写十六进制 `value`。摘要覆盖完整、精确的 UTF-8 Markdown 字节，保留原始换行，在分块或加行号前校验。PDF/Office 原文件的摘要不能充当其 Markdown 表示的摘要。不匹配时在合成前失败；原生证据分别保存整份来源的摘要与分块哈希。未提供摘要时仍记录实际内容哈希，但 `digest_verified` 为 false；字节匹配不证明作者身份或内容为真。
+
+时间项必须包含 `kind`（`source` 或 `work`）、非空 `meaning` 和 `basis`，以及带时区的 ISO-8601 `value`。不接受数字 epoch 或无时区时间，时间点规范化为 UTC。同一 kind/meaning/basis 不能重复。这些语义由调用方声明，不假定 `work` 是修改时间或生效时间，也不合成一个最新/生效时间。先判断适用范围，再仅比较 kind、meaning、basis 都一致的时间。导入/任务/发布时间和不透明版本号不能决定来源新旧。
+
+上下文来自结构化请求，不从 Markdown、frontmatter 或模型输出提取；认证与摘要校验不证明调用方陈述为真。运行时拥有的上下文保留在每个原始来源分块上，并独立传入合并、派生记录血缘和证据读取。不同来源的版本/时间分别保留。适用性与未解决分歧仍由 LLM 解释，元数据校验不证明语义正确。
+
+上下文只作用于本次运行，不保存成未来调度的元数据。与 `auto_update`/`update_schedule` 混用、传给 `--skill memory` 或旧 Memory 目标执行路径时会明确拒绝，不会静默忽略；原生文件流水线也支持目录计划执行。沿用原生请求/证据/任务持久化及保留期限，不新增文章 ID、引用表或永久历史。尚保留的证据携带其上下文；已过期/不可用的证据不能恢复历史元数据。来源发现、上游认证及字段填充属于调用方后续集成。
 
 ### 目标配置与操作历史
 
@@ -268,7 +300,7 @@ Idempotency-Key: <OV task_id>
 }
 ```
 
-`task_type` 和 `payload` 均必填。当前只支持 `task_type="compile"`；`payload` 使用本页创建任务的字段及校验规则，`instruction`、`args` 可省略。不支持的类型或无效的 payload 返回 `4xx`，不创建执行任务。
+`task_type` 和 `payload` 均必填。当前只支持 `task_type="compile"`；`payload` 使用本页创建任务的字段及校验规则，`instruction`、`args`、`source_context` 可省略。不支持的类型或无效的 payload 返回 `4xx`，不创建执行任务。
 
 OV 通过 `X-API-Key` 传递当前用户的 OV API Key；配置 `compile_api.gateway_token` 时还会发送 `X-Gateway-Token`。这些凭证不能出现在公开任务结果中。
 

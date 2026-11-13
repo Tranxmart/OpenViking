@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
+from openviking.models.source_context import CompileSourceContext
 from openviking.session.memory.dataclass import WikiLink
 from vikingbot.channels.openapi_models import OpenVikingConnection
 
@@ -60,6 +61,7 @@ class CompileRequest(BaseModel):
     instruction: str | None = None
     skill: str = Field(min_length=1)
     args: dict[str, Any] | None = None
+    source_context: CompileSourceContext | None = None
     openviking_connection: OpenVikingConnection | None = None
     _principal_scope: str = PrivateAttr(default="local")
 
@@ -86,6 +88,7 @@ class SanitizedCompileRequest(BaseModel):
     last_compile_time: datetime | None = None
     # Kernel change plan for incremental Compile; supersedes last_compile_time.
     changes: dict[str, Any] | None = None
+    source_context: CompileSourceContext | None = None
 
 
 def has_directory_plan(changes: dict[str, Any] | None) -> bool:

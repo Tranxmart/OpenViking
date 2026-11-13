@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError,
 from openviking.core.namespace import classify_uri, uri_parts
 from openviking.core.path_variables import resolve_path_variables
 from openviking.core.uri_validation import validate_request_viking_uri
+from openviking.models.source_context import CompileSource, CompileSourceContext
 from openviking.server.identity import RequestContext
 from openviking.service.compile_targets import CompileLifecycle, UpdateSchedule, split_control_args
 from openviking.service.external_task_service import (
@@ -75,6 +76,7 @@ class CompileRequest(BaseModel):
     skill: str = Field(min_length=1)
     instruction: str | None = None
     args: dict[str, Any] | None = None
+    source_context: CompileSourceContext | None = None
     # Explicit instruction/reason updates the saved instruction only when the
     # request also configures scheduling; ordinary manual instructions are per-run.
     _instruction_sent: bool = PrivateAttr(default=False)
@@ -125,6 +127,8 @@ class CompileRequest(BaseModel):
             raise ValueError("from must contain at least one directory")
         if self.is_memory_mode and self.from_:
             raise ValueError("--skill memory consolidates --to in place and takes no --from")
+        if self.is_memory_mode and self.source_context is not None:
+            raise ValueError("--skill memory does not accept source_context")
         return self
 
 
@@ -409,6 +413,8 @@ class CompileService:
         """Save explicit update settings synchronously, or queue one immediate Compile run."""
         control, _ = split_control_args(request.args)
         configures_schedule = "auto_update" in control or "update_schedule" in control
+        if configures_schedule and request.source_context is not None:
+            raise InvalidArgumentError("source_context is per-run and cannot configure a schedule")
         if request.is_memory_mode:
             if configures_schedule:
                 raise InvalidArgumentError("Scheduled updates do not support --skill memory")
@@ -977,7 +983,32 @@ class CompileService:
             resolve_path_variables(request.to), ctx, field_name="to"
         ).rstrip("/")
         self._validate_target(target)
-        return request.model_copy(update={"from_": sources, "to": target, "skill": skill})
+        source_context = request.source_context
+        if source_context is not None:
+            entries = [
+                CompileSource.model_validate(
+                    {
+                        **entry.model_dump(),
+                        "uri": validate_request_viking_uri(
+                            resolve_path_variables(entry.uri), ctx, field_name="source_context.uri"
+                        ).rstrip("/"),
+                    }
+                )
+                for entry in source_context.sources
+            ]
+            try:
+                source_context = CompileSourceContext(schema_version=1, sources=tuple(entries))
+                source_context.require_roots(sources)
+            except ValueError as exc:
+                raise InvalidArgumentError(str(exc)) from exc
+        return request.model_copy(
+            update={
+                "from_": sources,
+                "to": target,
+                "skill": skill,
+                "source_context": source_context,
+            }
+        )
 
     async def _normalize_request(
         self, request: CompileRequest, ctx: RequestContext

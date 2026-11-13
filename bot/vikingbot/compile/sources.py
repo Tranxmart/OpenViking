@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from bisect import bisect_right
-from dataclasses import asdict, dataclass
-from typing import Iterable
+from dataclasses import asdict, dataclass, replace
+from typing import Any, Iterable
 from urllib.parse import urlsplit
 
+from openviking.models.source_context import BoundSourceContext, CompileSource, CompileSourceContext
 from openviking.parse.parsers.media.utils import get_media_type
 from vikingbot.agent.tools.ov_file import VikingMultiReadTool
 from vikingbot.compile.models import CompileFailure, CompileLimits
@@ -43,12 +45,21 @@ class CompileSourceRange:
     continues_after: bool = False
     image: dict | None = None
     sha256: str | None = None
+    source_context: BoundSourceContext | None = None
 
     def as_assignment(self) -> dict:
         """Attach exact text ranges or bounded references to original images."""
+        result: dict[str, Any]
         if self.image:
-            return {"uri": self.uri, "sha256": self.sha256, "media_kind": "image"}
-        return asdict(self)
+            result = {"uri": self.uri, "sha256": self.sha256, "media_kind": "image"}
+        else:
+            result = asdict(self)
+            result.pop("source_context")
+        if self.source_context is not None:
+            result["source_context"] = self.source_context.model_dump(
+                mode="json", exclude_none=True
+            )
+        return result
 
     @property
     def input_chars(self) -> int:
@@ -73,7 +84,11 @@ async def read_source(client, uri) -> str | CompileSourceRange:
 
 
 def split_source(
-    uri: str, content: str | CompileSourceRange, max_chars: int
+    uri: str,
+    content: str | CompileSourceRange,
+    max_chars: int,
+    *,
+    source_context: CompileSource | None = None,
 ) -> list[CompileSourceRange]:
     """Partition original text by characters, preferring headings, paragraphs and whole lines.
 
@@ -82,8 +97,36 @@ def split_source(
     frontmatter/headings/table headers use at most one quarter of the budget; their
     original text remains in the source ranges. Empty files retain one empty range.
     """
+    bound = None
+    if source_context is not None:
+        if source_context.uri != uri:
+            raise CompileFailure(
+                "INVALID_ARGUMENT", "Source context URI mismatch", stage="pipeline"
+            )
+        if source_context.digest is not None and isinstance(content, CompileSourceRange):
+            raise CompileFailure(
+                "INVALID_ARGUMENT", "utf8-markdown digest requires a text source", stage="pipeline"
+            )
+        content_sha256 = (
+            content.sha256
+            if isinstance(content, CompileSourceRange)
+            else hashlib.sha256(content.encode("utf-8")).hexdigest()
+        )
+        if not content_sha256 or (
+            source_context.digest is not None and source_context.digest.value != content_sha256
+        ):
+            raise CompileFailure(
+                "INVALID_ARGUMENT",
+                "Source context digest does not match the input",
+                stage="pipeline",
+            )
+        bound = BoundSourceContext(
+            source=source_context,
+            content_sha256=content_sha256,
+            digest_verified=source_context.digest is not None,
+        )
     if isinstance(content, CompileSourceRange):
-        return [content]
+        return [replace(content, source_context=bound) if bound is not None else content]
     if get_media_type(urlsplit(uri).path, None) == "image":
         raise CompileFailure(
             "INVALID_ARGUMENT", "Image evidence must not be split as text", stage="pipeline"
@@ -166,6 +209,7 @@ def split_source(
                 continues_before=start != offsets[start_line - 1],
                 continues_after=end < len(content)
                 and end != offsets[bisect_right(offsets, end) - 1],
+                source_context=bound,
             )
         )
         start = end
@@ -173,7 +217,10 @@ def split_source(
 
 
 def pack_source_batches(
-    sources: Iterable[tuple[str, str | CompileSourceRange]], limits: CompileLimits
+    sources: Iterable[tuple[str, str | CompileSourceRange]],
+    limits: CompileLimits,
+    *,
+    source_context: CompileSourceContext | None = None,
 ) -> list[list[CompileSourceRange]]:
     """Pack exact source ranges and image references within existing text/media budgets.
 
@@ -185,8 +232,11 @@ def pack_source_batches(
     batch: list[CompileSourceRange] = []
     size = 0
     image_count = media_bytes = 0
+    contexts = {source.uri: source for source in source_context.sources} if source_context else {}
     for uri, content in sources:
-        for part in split_source(uri, content, limits.source_batch_chars):
+        for part in split_source(
+            uri, content, limits.source_batch_chars, source_context=contexts.get(uri)
+        ):
             chars, part_bytes = part.input_chars, 0
             if part.image:
                 from vikingbot.agent.loop import _inline_media_bytes

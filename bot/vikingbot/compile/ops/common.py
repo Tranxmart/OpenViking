@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from openviking.core.namespace import relative_uri_path
 from openviking.models.model_error import ModelErrorKind, model_error_kind
+from openviking.models.source_context import SOURCE_CONTEXT_RULES
 from vikingbot.compile import file_ops
 from vikingbot.compile.hashing import content_hash, digest
 from vikingbot.compile.pipeline_io import MAX_JOB_ATTEMPTS
@@ -34,7 +35,8 @@ if TYPE_CHECKING:
 
 
 # Combine receives only its batch and this evidence-consolidation contract.
-_COMBINE = """Consolidate the supplied evidence records for later synthesis.
+_COMBINE = (
+    """Consolidate the supplied evidence records for later synthesis.
 Merge duplicate facts only when they concern the same subject and applicability; use concise wording.
 Preserve unique facts, numbers, units, dates, conditions, exceptions, source references and locations.
 Keep different versions, scopes, conflicting claims and uncertainty distinct. Add no inference.
@@ -43,20 +45,29 @@ When nothing can be merged, retain the evidence rather than dropping facts to sh
 Return records with consolidated evidence in content and supporting supplied IDs in inputs.
 Cover every input. Preserve source paths and applicability in content where relevant.
 """
+    + SOURCE_CONTEXT_RULES
+)
 
 
 async def payload(runtime: Pipeline, record: Record, *, combine=False) -> dict:
-    """Load assigned evidence; Combine receives content and identity, without runtime metadata.
+    """Load assigned evidence and its runtime-owned source context for every transform.
 
     Image metadata is registered only after its snapshot write succeeds; load its
     body on viewing. Ready drafts retain their supporting facts and scope because
     the body alone may omit relationships. Missing other payloads fail the assignment.
     """
+    contexts = {
+        ref: runtime.evidence[ref]["source_context"]
+        for ref in record.source_refs
+        if "source_context" in runtime.evidence.get(ref, {})
+    }
+    context_fields = {"source_contexts": contexts} if contexts else {}
     data = runtime.evidence.get(record.record_id, {})
     if data.get("media_kind") == "image":
         return {
             "id": record.record_id,
             "payload": {**data, "source_ranges": [record.record_id]},
+            **context_fields,
         }
     data = await runtime.files.get(record.payload_ref)
     if data is None:
@@ -67,11 +78,12 @@ async def payload(runtime: Pipeline, record: Record, *, combine=False) -> dict:
                 "id": record.record_id,
                 "path": data["uri"],
                 "content": {k: data[k] for k in ("text", "context") if k in data},
+                **context_fields,
             }
         content = {"facts": data["fields"]}
         if data.get("scope"):
             content["scope"] = data["scope"]
-        item = {"id": record.record_id, "content": content}
+        item = {"id": record.record_id, "content": content, **context_fields}
         if record.ready_ref:
             ready = await runtime.files.get(record.ready_ref)
             if ready is None:
@@ -90,7 +102,7 @@ async def payload(runtime: Pipeline, record: Record, *, combine=False) -> dict:
                 f"{i}: {line}" for i, line in enumerate(data["text"].splitlines(keepends=True), 1)
             ),
         }
-    item = {"id": record.record_id, "payload": data}
+    item = {"id": record.record_id, "payload": data, **context_fields}
     if record.ready_ref:
         item["ready_file"] = file_ops.file_view(
             await runtime.files.get(record.ready_ref), record.ready_ref
